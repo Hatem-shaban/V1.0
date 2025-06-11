@@ -119,43 +119,48 @@
                 throw new Error('Failed to initialize AI tools');
             }
         }        // We can safely remove handleSuccessfulPayment as it's no longer needed// We can safely remove this handler as handleStripeSuccess handles everything we need// Handle Stripe success redirect        async function handleStripeSuccess() {
-            // Only run on non-dashboard pages with session_id
-            if (!window.location.pathname.includes('dashboard')) {
-                const urlParams = new URLSearchParams(window.location.search);
-                const sessionId = urlParams.get('session_id');
+            // Prevent multiple executions for the same session
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionId = urlParams.get('session_id');
+            const handledSession = localStorage.getItem('handledSession');
 
-                if (sessionId) {
-                    try {
-                        const stack = await startupStackPromise;
-                        const userId = localStorage.getItem('userId');
-                        
-                        if (!userId) {
-                            throw new Error('No user session found');
-                        }
+            // If we've already handled this session or we're on the dashboard, exit
+            if (window.location.pathname.includes('dashboard') || sessionId === handledSession) {
+                return;
+            }
 
-                        // Get user's current plan type
-                        const { data: userData, error: userError } = await stack.supabase
-                            .from('users')
-                            .select('plan_type, stripe_session_id')
-                            .eq('id', userId)
-                            .single();
+            if (sessionId) {
+                try {
+                    const stack = await startupStackPromise;
+                    const userId = localStorage.getItem('userId');
+                    
+                    if (!userId) {
+                        throw new Error('No user session found');
+                    }
 
-                        if (userError) throw userError;
+                    // Get user's current plan type
+                    const { data: userData, error: userError } = await stack.supabase
+                        .from('users')
+                        .select('plan_type, stripe_session_id')
+                        .eq('id', userId)
+                        .single();
 
-                        // Update subscription status based on plan type
-                        const { error } = await stack.supabase
-                            .from('users')
-                            .update({ 
-                                subscription_status: userData.plan_type === 'lifetime' ? 'lifetime_active' : 'active',
-                                stripe_session_id: sessionId,
-                                activated_at: new Date().toISOString()
-                            })
-                            .eq('id', userId);
+                    if (userError) throw userError;
 
-                        if (error) throw error;
+                    // Update subscription status based on plan type
+                    const { error } = await stack.supabase
+                        .from('users')
+                        .update({ 
+                            subscription_status: userData.plan_type === 'lifetime' ? 'lifetime_active' : 'active',
+                            stripe_session_id: sessionId,
+                            activated_at: new Date().toISOString()
+                        })
+                        .eq('id', userId);
 
-                        // Store active status
-                        localStorage.setItem('subscriptionActive', 'true');
+                    if (error) throw error;
+
+                    // Mark this session as handled
+                    localStorage.setItem('handledSession', sessionId);
 
                         // Show success message and redirect
                         showNotification('Subscription activated successfully!', 'success');

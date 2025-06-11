@@ -21,15 +21,35 @@
                     throw new Error('Missing required information');
                 }
 
+                // Prevent duplicate activation
+                const handledSession = sessionStorage.getItem('handledSession');
+                if (sessionId === handledSession) {
+                    window.location.replace('/dashboard.html');
+                    return;
+                }
+
                 statusDiv.innerHTML = 'Initializing...';
                 const stack = await startupStackPromise;
 
+                // Get current user info including plan type
+                const { data: user, error: userError } = await stack.supabase
+                    .from('users')
+                    .select('plan_type, subscription_status')
+                    .eq('id', userId)
+                    .single();
+
+                if (userError) throw userError;
+
                 statusDiv.innerHTML = 'Updating subscription status...';
+                const newStatus = user.plan_type === 'lifetime' ? 'lifetime_active' : 'active';
+
                 // Update subscription status with explicit return
                 const { data, error } = await stack.supabase
                     .from('users')
                     .update({ 
-                        subscription_status: 'active',
+                        subscription_status: newStatus,
+                        stripe_session_id: sessionId,
+                        activated_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', userId)
@@ -47,7 +67,7 @@
 
                 if (verifyError) throw verifyError;
 
-                if (verifyUser.subscription_status !== 'active') {
+                if (verifyUser.subscription_status !== newStatus) {
                     throw new Error('Subscription status update failed');
                 }
 
@@ -55,22 +75,22 @@
                 
                 // Store subscription info
                 localStorage.setItem('subscriptionActive', 'true');
-                localStorage.setItem('sessionId', sessionId);
+                sessionStorage.setItem('handledSession', sessionId);
 
                 // Redirect to dashboard after short delay
                 setTimeout(() => {
                     window.location.replace('/dashboard.html');
-                }, 2000);
+                }, 1500);
 
             } catch (error) {
                 console.error('Activation error:', error);
                 statusDiv.innerHTML = `Error: ${error.message}`;
-                // Log additional error details
+                
                 if (error.details) console.error('Error details:', error.details);
                 
                 setTimeout(() => {
                     window.location.replace('/?error=activation');
-                }, 3000);
+                }, 2000);
             }
         }
 
