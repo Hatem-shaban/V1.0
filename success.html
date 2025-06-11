@@ -10,12 +10,24 @@
         import startupStackPromise from './app.js';
 
         async function activateSubscription() {
-            const statusDiv = document.getElementById('status');
+            const statusDiv = document.getElementById('status');            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const progressPercent = document.getElementById('progressPercent');
+            const errorDetails = document.getElementById('errorDetails');
+
+            function updateProgress(percent, text) {
+                progressBar.style.width = `${percent}%`;
+                progressPercent.textContent = `${percent}%`;
+                progressText.textContent = text;
+            }
+
             try {
                 // Get session and user info from URL
                 const params = new URLSearchParams(window.location.search);
                 const sessionId = params.get('session_id');
                 const userId = localStorage.getItem('userId');
+
+                updateProgress(25, 'Verifying session...');
 
                 if (!sessionId || !userId) {
                     throw new Error('Missing required information');
@@ -26,9 +38,7 @@
                 if (sessionId === handledSession) {
                     window.location.replace('/dashboard.html');
                     return;
-                }
-
-                statusDiv.innerHTML = 'Initializing...';
+                }                updateProgress(50, 'Initializing subscription...');
                 const stack = await startupStackPromise;
 
                 // Get current user info including plan type
@@ -43,7 +53,7 @@
                 statusDiv.innerHTML = 'Updating subscription status...';
                 const newStatus = user.plan_type === 'lifetime' ? 'lifetime_active' : 'active';
 
-                // Update subscription status with explicit return
+                // Update subscription status with explicit return                updateProgress(75, 'Activating subscription...');
                 const { data, error } = await stack.supabase
                     .from('users')
                     .update({ 
@@ -69,28 +79,40 @@
 
                 if (verifyUser.subscription_status !== newStatus) {
                     throw new Error('Subscription status update failed');
-                }
-
-                statusDiv.innerHTML = 'Subscription activated successfully!';
+                }                updateProgress(100, 'Subscription activated successfully!');
+                statusDiv.innerHTML = 'Your subscription is now active!';
                 
                 // Store subscription info
                 localStorage.setItem('subscriptionActive', 'true');
                 sessionStorage.setItem('handledSession', sessionId);
 
-                // Redirect to dashboard after short delay
+                // Redirect to dashboard after showing success
                 setTimeout(() => {
-                    window.location.replace('/dashboard.html');
-                }, 1500);
-
-            } catch (error) {
+                    statusDiv.innerHTML = 'Redirecting to dashboard...';
+                    setTimeout(() => {
+                        window.location.replace('/dashboard.html');
+                    }, 500);
+                }, 1000);            } catch (error) {
                 console.error('Activation error:', error);
-                statusDiv.innerHTML = `Error: ${error.message}`;
+                
+                // Show error state
+                updateProgress(0, 'Activation failed');
+                statusDiv.innerHTML = 'Error activating subscription';
+                errorDetails.textContent = error.message;
+                errorDetails.classList.remove('hidden');
                 
                 if (error.details) console.error('Error details:', error.details);
                 
+                // Add retry button
+                const retryButton = document.createElement('button');
+                retryButton.className = 'mt-4 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors';
+                retryButton.textContent = 'Retry Activation';
+                retryButton.onclick = activateSubscription;
+                errorDetails.insertAdjacentElement('afterend', retryButton);
+                
                 setTimeout(() => {
                     window.location.replace('/?error=activation');
-                }, 2000);
+                }, 5000);
             }
         }
 
@@ -103,6 +125,16 @@
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
         <h1 class="text-2xl font-bold mb-4">Activating Your Subscription</h1>
         <div id="status" class="text-gray-400">Initializing...</div>
+        <div id="progress" class="mt-8 max-w-md mx-auto">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-400" id="progressText">Processing payment...</span>
+                <span class="text-sm text-gray-400" id="progressPercent">25%</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2">
+                <div id="progressBar" class="bg-purple-600 rounded-full h-2 transition-all duration-500" style="width: 25%"></div>
+            </div>
+        </div>
+        <div id="errorDetails" class="mt-6 text-red-400 hidden"></div>
     </div>
 </body>
 </html>
