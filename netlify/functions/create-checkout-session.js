@@ -77,15 +77,13 @@ exports.handler = async (event, context) => {
         const maxRetries = 3;
         let updateError;
 
-        while (retryCount < maxRetries) {
-            const { error } = await supabase
+        while (retryCount < maxRetries) {            const { error } = await supabase
                 .from('users')
                 .update({ 
                     subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
                     stripe_session_id: session.id,
-                    selected_plan: priceId || process.env.STRIPE_PRICE_ID,
-                    updated_at: new Date().toISOString(),
-                    plan_type: isLifetimePlan ? 'lifetime' : 'subscription'
+                    subscription_plan: priceId || process.env.STRIPE_PRICE_ID,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', userId);
 
