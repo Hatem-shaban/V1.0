@@ -122,8 +122,8 @@
         if (window.location.search.includes('session_id')) {
             const sessionId = new URLSearchParams(window.location.search).get('session_id');
             if (sessionId) {
-                // Redirect to success page for proper handling
-                window.location.replace(`/success.html?session_id=${sessionId}`);
+                // Redirect to success page for proper handling                const selectedPriceId = localStorage.getItem('selectedPriceId');
+                window.location.replace(`/success.html?session_id=${sessionId}&price_id=${selectedPriceId}`);
             }
         }
     </script>

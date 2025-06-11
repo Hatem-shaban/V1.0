@@ -19,12 +19,11 @@
                 progressBar.style.width = `${percent}%`;
                 progressPercent.textContent = `${percent}%`;
                 progressText.textContent = text;
-            }
-
-            try {
+            }            try {
                 // Get session and user info from URL
                 const params = new URLSearchParams(window.location.search);
                 const sessionId = params.get('session_id');
+                const selectedPriceId = params.get('price_id');
                 const userId = localStorage.getItem('userId');
 
                 updateProgress(25, 'Verifying session...');
@@ -39,17 +38,11 @@
                     window.location.replace('/dashboard.html');
                     return;
                 }                updateProgress(50, 'Initializing subscription...');
-                const stack = await startupStackPromise;                // Get current user info including plan type
-                const { data: user, error: userError } = await stack.supabase
-                    .from('users')
-                    .select('plan_type, subscription_status')
-                    .eq('id', userId)
-                    .single();
-
-                if (userError) throw userError;
-
+                const stack = await startupStackPromise;                // Determine plan type from the selected price ID
+                const isLifetimePlan = selectedPriceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX';
+                
                 statusDiv.innerHTML = 'Updating subscription status...';
-                const newStatus = user.plan_type === 'lifetime' ? 'lifetime_active' : 'active';// Update subscription status with explicit return                updateProgress(75, 'Activating subscription...');
+                const newStatus = isLifetimePlan ? 'lifetime_active' : 'active';// Update subscription status with explicit return                updateProgress(75, 'Activating subscription...');
                 const { data, error } = await stack.supabase
                     .from('users')
                     .update({ 
