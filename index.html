@@ -118,87 +118,56 @@
                 console.error('Tool initialization error:', error);
                 throw new Error('Failed to initialize AI tools');
             }
-        }
+        }        // We can safely remove handleSuccessfulPayment as it's no longer needed// We can safely remove this handler as handleStripeSuccess handles everything we need// Handle Stripe success redirect        async function handleStripeSuccess() {
+            // Only run on non-dashboard pages with session_id
+            if (!window.location.pathname.includes('dashboard')) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const sessionId = urlParams.get('session_id');
 
-        async function handleSuccessfulPayment(subscriptionId) {
-            try {
-                const email = localStorage.getItem('userEmail');
-                if (!email) throw new Error('User email not found');
+                if (sessionId) {
+                    try {
+                        const stack = await startupStackPromise;
+                        const userId = localStorage.getItem('userId');
+                        
+                        if (!userId) {
+                            throw new Error('No user session found');
+                        }
 
-                // Initialize StartupStack
-                const { aiTools, userManager } = window.StartupStack;
+                        // Get user's current plan type
+                        const { data: userData, error: userError } = await stack.supabase
+                            .from('users')
+                            .select('plan_type, stripe_session_id')
+                            .eq('id', userId)
+                            .single();
 
-                // Register user in Supabase
-                const user = await userManager.signUp(email);
-                if (!user) throw new Error('Failed to register user');
+                        if (userError) throw userError;
 
-                // Store user data in localStorage
-                localStorage.setItem('userId', user.id);
-                localStorage.setItem('subscriptionId', subscriptionId);
-                
-                // Initialize AI tools
-                await initializeAITools(user.id);
+                        // Update subscription status based on plan type
+                        const { error } = await stack.supabase
+                            .from('users')
+                            .update({ 
+                                subscription_status: userData.plan_type === 'lifetime' ? 'lifetime_active' : 'active',
+                                stripe_session_id: sessionId,
+                                activated_at: new Date().toISOString()
+                            })
+                            .eq('id', userId);
 
-                showNotification('Payment successful! Welcome to StartupStack!', 'success');
-                
-                // Redirect to dashboard after short delay
-                setTimeout(() => {
-                    window.location.href = '/dashboard.html';
-                }, 2000);
-            } catch (error) {
-                console.error('Post-payment setup error:', error);
-                showNotification('Account setup error: ' + error.message, 'error');
-            }
-        }        // We can safely remove this handler as handleStripeSuccess handles everything we need// Handle Stripe success redirect
-        async function handleStripeSuccess() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const sessionId = urlParams.get('session_id');
+                        if (error) throw error;
 
-            if (sessionId) {
-                try {
-                    const stack = await startupStackPromise;
-                    const userId = localStorage.getItem('userId');
-                    
-                    if (!userId) {
-                        throw new Error('No user session found');
+                        // Store active status
+                        localStorage.setItem('subscriptionActive', 'true');
+
+                        // Show success message and redirect
+                        showNotification('Subscription activated successfully!', 'success');
+                        window.location.replace('/dashboard.html');
+                    } catch (error) {
+                        console.error('Payment success handling error:', error);
+                        showNotification('Error activating subscription', 'error');
+                        window.location.replace('/?subscription=error');
                     }
-
-                    // Get user's current plan type
-                    const { data: userData, error: userError } = await stack.supabase
-                        .from('users')
-                        .select('plan_type, stripe_session_id')
-                        .eq('id', userId)
-                        .single();
-
-                    if (userError) throw userError;
-
-                    // Update subscription status based on plan type
-                    const { error } = await stack.supabase
-                        .from('users')
-                        .update({ 
-                            subscription_status: userData.plan_type === 'lifetime' ? 'lifetime_active' : 'active',
-                            stripe_session_id: sessionId,
-                            activated_at: new Date().toISOString()
-                        })
-                        .eq('id', userId);
-
-                    if (error) throw error;                    // Show success message
-                    showNotification('Subscription activated successfully!', 'success');
-                    
-                    // Store active status in localStorage
-                    localStorage.setItem('subscriptionActive', 'true');
-                    
-                    // Use replace to prevent back navigation
-                    window.location.replace('/dashboard.html');
-
-                } catch (error) {
-                    console.error('Payment success handling error:', error);
-                    showNotification('Error activating subscription', 'error');
-                    window.location.replace('/?subscription=error');
                 }
-            }
-        }        // Check for success redirect on page load, but only if we're not already on the dashboard
-        if (window.location.search.includes('session_id') && !window.location.pathname.includes('dashboard')) {
+            }        // Call handleStripeSuccess on page load (it has its own checks)
+        if (window.location.search.includes('session_id')) {
             handleStripeSuccess();
         }
     </script>
